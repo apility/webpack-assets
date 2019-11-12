@@ -4,6 +4,8 @@
 namespace Apility\WebpackAssets;
 
 
+use Apility\WebpackAssets\utils\TagBuilder;
+use Closure;
 use stdClass;
 use Tightenco\Collect\Support\Collection;
 
@@ -16,8 +18,9 @@ use Tightenco\Collect\Support\Collection;
  */
 class WebpackAssets {
   static $defaultOptions = [
-    'defaultEntrypoint' => 'app',
+    'entrypointName' => 'app',
     'preload' => true,
+    'integrity' => false,
   ];
 
   /** @var object */
@@ -56,21 +59,28 @@ class WebpackAssets {
       throw new WebpackAssetsException('Invalid manifest');
     }
 
-    $this->options = (object) array_merge(
-      static::$defaultOptions,
-      (array) $options
+    $this->options = $this->mergeOptions($options);
+  }
+
+  /**
+   * @param array|object $optionsOverride
+   * @return object
+   */
+  protected function mergeOptions ($optionsOverride) {
+    return (object) array_merge(
+      (array) static::$defaultOptions,
+      (array) $this->options,
+      (array) $optionsOverride
     );
   }
 
   /**
    * @noinspection PhpDocMissingThrowsInspection
-   * @param string|null $entrypointName
+   * @param string $entrypointName
    * @return object
    */
-  protected function getEntrypoint ($entrypointName = null) {
-    $entrypointName = $entrypointName ?? $this->options->entrypoint;
-
-    $entrypoint = $this->manifest->entrypoints->{$entrypointName ?? $this->options->defaultEntrypoint} ?? null;
+  protected function getEntrypoint ($entrypointName) {
+    $entrypoint = $this->manifest->entrypoints->{$entrypointName} ?? null;
 
     if ($entrypoint === null) {
       /** @noinspection PhpUnhandledExceptionInspection */
@@ -82,79 +92,165 @@ class WebpackAssets {
 
   /**
    * @param string $href
-   * @param string $rel
-   * @param string|null $as
+   * @param string $as
+   * @param string $integrity [optional]
    * @return string
    */
-  protected function getLinkTag ($href, $rel, $as = null) {
+  protected static function createPreloadLinkTag ($href, $as, $integrity = null) {
     $attributes = new Collection();
 
-    $attributes->push("href=\"{$href}\"");
+    $attributes->put('href', $href);
 
-    $attributes->push("rel=\"{$rel}\"");
+    $attributes->put('rel', 'preload');
 
-    if ($as) {
-      $attributes->push("as=\"${as}\"");
+    $attributes->put('as', $as);
+
+    if ($integrity) {
+      $attributes->put('integrity', $integrity);
     }
 
-    return "<link {$attributes->join(' ')}>";
+    return TagBuilder::createTag('link', $attributes, null, 'self-closing');
+  }
+
+  /**
+   * @param string $href
+   * @param string $rel
+   * @param string $integrity [optional]
+   * @return string
+   */
+  protected static function createLinkTag ($href, $rel, $integrity = null) {
+    $attributes = new Collection();
+
+    $attributes->put('href', $href);
+
+    $attributes->put('rel', $rel);
+
+    if ($integrity) {
+      $attributes->put('integrity', $integrity);
+    }
+
+    return TagBuilder::createTag('link', $attributes, null, 'self-closing');
   }
 
   /**
    * @param string $src
+   * @param string $integrity [optional]
    * @return string
    */
-  protected function getScriptTag ($src) {
-    return "<script src=\"{$src}\"></script>";
+  protected static function createScriptTag ($src, $integrity = null) {
+    $attributes = new Collection();
+
+    $attributes->put('src', $src);
+
+    if ($integrity) {
+      $attributes->put('integrity', $integrity);
+    }
+
+    return TagBuilder::createTag('script', $attributes);
+  }
+
+  /**
+   * @param $options
+   * @return Closure
+   */
+  protected function createIntegrityMapFunction ($options) {
+    return function (string $assetPath) use ($options) {
+      $src = $assetPath;
+
+      $integrity = null;
+
+      if ($options->integrity) {
+        $assetObject = collect($this->manifest)->first(function ($value) use ($assetPath) {
+          if ($value instanceof stdClass && $value->src === $assetPath && $value->integrity) {
+            return true;
+          }
+
+          return false;
+        });
+
+        if (!$assetObject) {
+          throw new WebpackAssetsException("Couldn't find integrity for asset {$assetPath}");
+        }
+
+        $integrity = $assetObject->integrity;
+      }
+
+      return (object) [
+        'src' => $src,
+        'integrity' => $integrity,
+      ];
+    };
   }
 
   /**
    * @noinspection PhpDocMissingThrowsInspection
-   * @param string|null $entrypointName
+   * @param array|object $optionsOverride [optional]
    * @return string
+   * @throws WebpackAssetsException
    */
-  function getHeadAssets ($entrypointName = null) {
-    /** @noinspection PhpUnhandledExceptionInspection */
-    $entrypoint = $this->getEntrypoint($entrypointName);
+  function getHeadAssets ($optionsOverride = null) {
+    $options = $this->mergeOptions($optionsOverride);
+    $entrypoint = $this->getEntrypoint($options->entrypointName);
+
+    $integrityMapFunction = $this->createIntegrityMapFunction($options);
+
+    $styleAssets = collect($entrypoint->css)->map($integrityMapFunction);
+    $scriptAssets = collect($entrypoint->js)->map($integrityMapFunction);
 
     $tags = new Collection();
 
-    $css = collect($entrypoint->css);
-    $js = collect($entrypoint->js);
+    if ($options->preload) {
+      $styleAssets
+        ->map(function ($styleAsset) {
+          return static::createPreloadLinkTag($styleAsset->src, 'style', $styleAsset->integrity);
+        })
+        ->each(function ($tag) use ($tags) {
+          $tags->push($tag);
+        });
 
-    if ($this->options->preload) {
-      $css->each(function ($styleAssetPath) use ($tags) {
-        $tags->push($this->getLinkTag($styleAssetPath, 'preload', 'style'));
-      });
-
-      $js->each(function ($scriptAssetPath) use ($tags) {
-        $tags->push($this->getLinkTag($scriptAssetPath, 'preload', 'script'));
-      });
+      $scriptAssets
+        ->map(function ($scriptAsset) {
+          return static::createPreloadLinkTag($scriptAsset->src, 'script', $scriptAsset->integrity);
+        })
+        ->each(function ($tag) use ($tags) {
+          $tags->push($tag);
+        });
     }
 
-    $css->each(function ($styleAssetPath) use ($tags) {
-      $tags->push($this->getLinkTag($styleAssetPath, 'stylesheet'));
-    });
+    $styleAssets
+      ->map(function ($styleAsset) {
+        return static::createLinkTag($styleAsset->src, 'stylesheet', $styleAsset->integrity);
+      })
+      ->each(function ($tag) use ($tags) {
+        $tags->push($tag);
+      });
 
     return $tags->join("\n");
   }
 
   /**
    * @noinspection PhpDocMissingThrowsInspection
-   * @param string|null $entrypointName
+   * @param array|object $optionsOverride [optional]
    * @return string
+   * @throws WebpackAssetsException
    */
-  function getBodyAssets ($entrypointName = null) {
-    /** @noinspection PhpUnhandledExceptionInspection */
-    $entrypoint = $this->getEntrypoint($entrypointName);
+  function getBodyAssets ($optionsOverride = null) {
+    $options = $this->mergeOptions($optionsOverride);
+    $entrypoint = $this->getEntrypoint($options->entrypointName);
+
+    $integrityMapFunction = $this->createIntegrityMapFunction($options);
+
+    $scriptAssets = collect($entrypoint->js)->map($integrityMapFunction);
 
     $tags = new Collection();
 
-    $js = collect($entrypoint->js);
-
-    $js->each(function ($scriptAssetPath) use ($tags) {
-      $tags->push($this->getScriptTag($scriptAssetPath));
-    });
+    $scriptAssets
+      ->map(function ($scriptAsset) {
+        return static::createScriptTag($scriptAsset->src, $scriptAsset->integrity);
+      })
+      ->each(function ($tag) use ($tags) {
+        $tags->push($tag);
+      });
 
     return $tags->join("\n");
   }
