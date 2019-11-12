@@ -18,8 +18,9 @@ use Apility\WebpackAssets\WebpackAssets;
 $manifest = "path/to/manifest.json";
 
 $options = [
+  'entrypointName' => 'app',
   'preload' => true,
-  'entrypoint' => 'app',
+  'integrity' => false,
 ];
 
 $webpackAssets = new WebpackAssets($manifest, $options);
@@ -44,8 +45,9 @@ The `$manifest` argument can be one of the following:
 
 ### $options
 The `$options` argument is an assoicative array on an object with the following keys:
-* `defaultEntrypoint`: The default entrypoint to get from the manifest when none is specified in `getHeadAssets` or `getBodyAssets` calls.  
+* `entrypointName`: The default entrypoint to get from the manifest when none is specified in `getHeadAssets` or `getBodyAssets` calls.  
   Default: `'app'`
 * `preload`: Whether add preload links for style and scripts in head.  
   Default: `true`
-
+* `integrity`: Whether integrity should be read from the manifest, and added to the output.  
+  Default: `false`
