@@ -200,8 +200,8 @@ class WebpackAssets {
 
     $integrityMapFunction = $this->createIntegrityMapFunction($options);
 
-    $styleAssets = collect($entrypoint->css)->map($integrityMapFunction);
-    $scriptAssets = collect($entrypoint->js)->map($integrityMapFunction);
+    $styleAssets = collect($entrypoint->css ?? [])->map($integrityMapFunction);
+    $scriptAssets = collect($entrypoint->js ?? [])->map($integrityMapFunction);
 
     $tags = new Collection();
 
@@ -246,7 +246,7 @@ class WebpackAssets {
 
     $integrityMapFunction = $this->createIntegrityMapFunction($options);
 
-    $scriptAssets = collect($entrypoint->js)->map($integrityMapFunction);
+    $scriptAssets = collect($entrypoint->js ?? [])->map($integrityMapFunction);
 
     $tags = new Collection();
 
