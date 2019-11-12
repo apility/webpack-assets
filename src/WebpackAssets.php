@@ -107,6 +107,8 @@ class WebpackAssets {
 
     if ($integrity) {
       $attributes->put('integrity', $integrity);
+
+      $attributes->put('crossorigin', 'anonymous');
     }
 
     return TagBuilder::createTag('link', $attributes, null, 'self-closing');
@@ -127,6 +129,8 @@ class WebpackAssets {
 
     if ($integrity) {
       $attributes->put('integrity', $integrity);
+
+      $attributes->put('crossorigin', 'anonymous');
     }
 
     return TagBuilder::createTag('link', $attributes, null, 'self-closing');
@@ -144,6 +148,8 @@ class WebpackAssets {
 
     if ($integrity) {
       $attributes->put('integrity', $integrity);
+
+      $attributes->put('crossorigin', 'anonymous');
     }
 
     return TagBuilder::createTag('script', $attributes);
