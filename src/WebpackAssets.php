@@ -21,6 +21,7 @@ class WebpackAssets {
     'entrypointName' => 'app',
     'preload' => true,
     'integrity' => false,
+    'basePath' => null,
   ];
 
   /** @var object */
@@ -188,6 +189,24 @@ class WebpackAssets {
     };
   }
 
+  protected function createBasePathMapFunction ($options) {
+    return function (object $asset) use ($options) {
+      if ($options->basePath === null) {
+        return $asset;
+      }
+
+      // We only want to apply basePath to requests going to the same host. If it's a full url, we don't interfere.
+      if ($asset->src[0] !== '/') {
+        return $asset;
+      }
+
+      return (object) array_merge(
+        (array) $asset,
+        ['src' => "{$options->basePath}{$asset->src}"]
+      );
+    };
+  }
+
   /**
    * @noinspection PhpDocMissingThrowsInspection
    * @param array|object $optionsOverride [optional]
@@ -199,9 +218,15 @@ class WebpackAssets {
     $entrypoint = $this->getEntrypoint($options->entrypointName);
 
     $integrityMapFunction = $this->createIntegrityMapFunction($options);
+    $basePathMapFunction = $this->createBasePathMapFunction($options);
 
-    $styleAssets = collect($entrypoint->css ?? [])->map($integrityMapFunction);
-    $scriptAssets = collect($entrypoint->js ?? [])->map($integrityMapFunction);
+    $styleAssets = collect($entrypoint->css ?? [])
+      ->map($integrityMapFunction)
+      ->map($basePathMapFunction);
+
+    $scriptAssets = collect($entrypoint->js ?? [])
+      ->map($integrityMapFunction)
+      ->map($basePathMapFunction);
 
     $tags = new Collection();
 
@@ -245,8 +270,11 @@ class WebpackAssets {
     $entrypoint = $this->getEntrypoint($options->entrypointName);
 
     $integrityMapFunction = $this->createIntegrityMapFunction($options);
+    $basePathMapFunction = $this->createBasePathMapFunction($options);
 
-    $scriptAssets = collect($entrypoint->js ?? [])->map($integrityMapFunction);
+    $scriptAssets = collect($entrypoint->js ?? [])
+      ->map($integrityMapFunction)
+      ->map($basePathMapFunction);
 
     $tags = new Collection();
 
