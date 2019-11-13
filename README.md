@@ -21,6 +21,7 @@ $options = [
   'entrypointName' => 'app',
   'preload' => true,
   'integrity' => false,
+  'basePath' => null,
 ];
 
 $webpackAssets = new WebpackAssets($manifest, $options);
@@ -51,3 +52,6 @@ The `$options` argument is an assoicative array on an object with the following 
   Default: `true`
 * `integrity`: Whether integrity should be read from the manifest, and added to the output.  
   Default: `false`
+* `basePath`: Adds basePath segment to prepend asset urls with. Note: basePath won't be applied to hmr urls, because it only applies to assets whose url start with `/`.
+  Default: `null`
+ 
