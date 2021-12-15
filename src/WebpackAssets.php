@@ -16,12 +16,14 @@ use Tightenco\Collect\Support\Collection;
  * Class WebpackAssets
  * @package Helpers
  */
-class WebpackAssets {
+class WebpackAssets
+{
   static $defaultOptions = [
     'entrypointName' => 'app',
     'preload' => true,
     'integrity' => false,
     'basePath' => null,
+    'version' => null,
   ];
 
   /** @var object */
@@ -39,7 +41,8 @@ class WebpackAssets {
    *  <p>A deserialized array of object of the manifest file.</p>
    * @param array|object $options [optional]
    */
-  public function __construct ($manifest, $options = null) {
+  public function __construct($manifest, $options = null)
+  {
     if ($manifest instanceof stdClass) {
       $this->manifest = $manifest;
     } else if (is_array($manifest)) {
@@ -67,7 +70,8 @@ class WebpackAssets {
    * @param array|object $optionsOverride
    * @return object
    */
-  protected function mergeOptions ($optionsOverride) {
+  protected function mergeOptions($optionsOverride)
+  {
     return (object) array_merge(
       (array) static::$defaultOptions,
       (array) $this->options,
@@ -80,7 +84,8 @@ class WebpackAssets {
    * @param string $entrypointName
    * @return object
    */
-  protected function getEntrypoint ($entrypointName) {
+  protected function getEntrypoint($entrypointName)
+  {
     $entrypoint = $this->manifest->entrypoints->{$entrypointName} ?? null;
 
     if ($entrypoint === null) {
@@ -97,7 +102,8 @@ class WebpackAssets {
    * @param string $integrity [optional]
    * @return string
    */
-  protected static function createPreloadLinkTag ($href, $as, $integrity = null) {
+  protected static function createPreloadLinkTag($href, $as, $integrity = null)
+  {
     $attributes = new Collection();
 
     $attributes->put('href', $href);
@@ -121,7 +127,8 @@ class WebpackAssets {
    * @param string $integrity [optional]
    * @return string
    */
-  protected static function createLinkTag ($href, $rel, $integrity = null) {
+  protected static function createLinkTag($href, $rel, $integrity = null)
+  {
     $attributes = new Collection();
 
     $attributes->put('href', $href);
@@ -142,7 +149,8 @@ class WebpackAssets {
    * @param string $integrity [optional]
    * @return string
    */
-  protected static function createScriptTag ($src, $integrity = null) {
+  protected static function createScriptTag($src, $integrity = null)
+  {
     $attributes = new Collection();
 
     $attributes->put('src', $src);
@@ -160,7 +168,29 @@ class WebpackAssets {
    * @param $options
    * @return Closure
    */
-  protected function createIntegrityMapFunction ($options) {
+  protected function addVersionHashMapFunction($options)
+  {
+    return function (string $assetPath) use ($options) {
+      $src = $assetPath;
+
+      if ($options->version) {
+        if (strpos($src, '?') !== false) {
+          $src .= "&" . 'v=' . $options->version;
+        } else {
+          $src .= "?" . 'v=' . $options->version;
+        }
+      }
+
+      return $src;
+    };
+  }
+
+  /**
+   * @param $options
+   * @return Closure
+   */
+  protected function createIntegrityMapFunction($options)
+  {
     return function (string $assetPath) use ($options) {
       $src = $assetPath;
 
@@ -189,7 +219,8 @@ class WebpackAssets {
     };
   }
 
-  protected function createBasePathMapFunction ($options) {
+  protected function createBasePathMapFunction($options)
+  {
     return function (object $asset) use ($options) {
       if ($options->basePath === null) {
         return $asset;
@@ -213,18 +244,22 @@ class WebpackAssets {
    * @return string
    * @throws WebpackAssetsException
    */
-  function getHeadAssets ($optionsOverride = null) {
+  function getHeadAssets($optionsOverride = null)
+  {
     $options = $this->mergeOptions($optionsOverride);
     $entrypoint = $this->getEntrypoint($options->entrypointName);
 
+    $versionMapFunction = $this->addVersionHashMapFunction($options);
     $integrityMapFunction = $this->createIntegrityMapFunction($options);
     $basePathMapFunction = $this->createBasePathMapFunction($options);
 
     $styleAssets = collect($entrypoint->css ?? [])
+      ->map($versionMapFunction)
       ->map($integrityMapFunction)
       ->map($basePathMapFunction);
 
     $scriptAssets = collect($entrypoint->js ?? [])
+      ->map($versionMapFunction)
       ->map($integrityMapFunction)
       ->map($basePathMapFunction);
 
@@ -265,14 +300,17 @@ class WebpackAssets {
    * @return string
    * @throws WebpackAssetsException
    */
-  function getBodyAssets ($optionsOverride = null) {
+  function getBodyAssets($optionsOverride = null)
+  {
     $options = $this->mergeOptions($optionsOverride);
     $entrypoint = $this->getEntrypoint($options->entrypointName);
 
+    $versionMapFunction = $this->addVersionHashMapFunction($options);
     $integrityMapFunction = $this->createIntegrityMapFunction($options);
     $basePathMapFunction = $this->createBasePathMapFunction($options);
 
     $scriptAssets = collect($entrypoint->js ?? [])
+      ->map($versionMapFunction)
       ->map($integrityMapFunction)
       ->map($basePathMapFunction);
 
